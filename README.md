@@ -53,7 +53,7 @@ insert into current_status (id, is_working) values (1, false);
 create table inspirations (
   id bigint primary key generated always as identity,
   create_time text, content text, category text
-);</details>
+);</details> ```
 
 3. 运行成功后，进入 Project Settings -> API，复制你的 Project URL 和 anon public key 保存备用。
 
