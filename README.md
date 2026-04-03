@@ -1,6 +1,6 @@
 # 🎓 Novawood's Learning Space | 硕博科研全平台工作流
 
-![Python](https://img-shields.com/badge/Python-3.12-blue) ![Streamlit](https://img-shields.com/badge/Streamlit-App-FF4B4B) ![Supabase](https://img-shields.com/badge/Supabase-Database-3ECF8E)
+![Python](https://img.shields.io/badge/Python-3.12-blue) ![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B) ![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E)
 
 告别碎片化的纸质手账与笨重的效率软件。这是一个基于 Python + Streamlit + Supabase 打造的**全平台、云同步、高定制度**的科研日常管理看板。
 
