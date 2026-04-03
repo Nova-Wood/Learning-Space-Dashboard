@@ -1,11 +1,31 @@
-import streamlit as st
-import pandas as pd
-import datetime
-from supabase import create_client, Client
-import plotly.express as px
-
 # --- 基础配置 ---
 st.set_page_config(page_title="硕博科研工作流", page_icon="🎓", layout="wide")
+
+# ==========================================
+# 🔒 核心安全防盗门
+# ==========================================
+# 1. 检查当前设备是否已经登录过
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+
+# 2. 如果没登录，显示密码输入框并拦截后续代码
+if not st.session_state.authenticated:
+    st.markdown("<h2 style='text-align: center; margin-top: 100px;'>🔒 私人科研空间，闲人免进</h2>", unsafe_allow_html=True)
+    
+    # 密码输入框 (type="password" 会让输入的字变成小黑点)
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        pwd = st.text_input("请输入访问密码", type="password", placeholder="输入密码后按回车或点击下方按钮")
+        if st.button("🗝️ 开锁进入", use_container_width=True):
+            if pwd == st.secrets["APP_PASSWORD"]:
+                st.session_state.authenticated = True
+                st.toast("✅ 密码正确，欢迎回来！")
+                st.rerun() # 刷新页面，此时 authenticated 变成 True，就会跳过防盗门
+            else:
+                st.error("❌ 密码错误，你是不是导师派来的卧底？")
+    
+    # 关键：阻断程序，只要没登录，下面的打卡代码绝对不会执行！
+    st.stop() 
 
 # --- 强制设置时区 (东八区 UTC+8) ---
 TZ = datetime.timezone(datetime.timedelta(hours=8))
