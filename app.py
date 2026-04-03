@@ -96,15 +96,114 @@ for i, (p_name, p_icon) in enumerate(periods):
 # ==========================================
 # 功能区：任务四象限 & 阅读计划
 # ==========================================
-col_l, col_r = st.columns(2)
+col_l, col_r = st.columns([1.2, 1]) # 让左边的四象限稍微宽一点点
+
 with col_l:
-    st.subheader("📋 任务四象限")
-    # 此处省略复杂的增删逻辑，参考之前版本的四象限代码渲染...
-    st.caption("建议优先处理【重要且紧急】的任务")
+    st.subheader("🎯 任务管理 (四象限)")
+    
+    with st.expander("➕ 新增待办任务"):
+        with st.form("add_task_form", clear_on_submit=True):
+            t_name = st.text_input("任务名称", placeholder="例如：修改第三章实验数据")
+            col_t1, col_t2 = st.columns(2)
+            with col_t1:
+                t_ddl = st.date_input("截止日期 (DDL)", datetime.date.today())
+            with col_t2:
+                t_priority = st.selectbox("优先级", ["🚀 重要且紧急", "📅 重要不紧急", "⚡ 紧急不重要", "☁️ 不重要不紧急"])
+            
+            if st.form_submit_button("添加至任务池"):
+                if t_name:
+                    supabase.table("tasks").insert({
+                        "task_name": t_name, 
+                        "status": "待办", 
+                        "create_date": str(datetime.date.today()),
+                        "deadline": str(t_ddl), 
+                        "priority": t_priority
+                    }).execute()
+                    st.rerun()
+
+    # 渲染云端的任务数据
+    task_res = supabase.table("tasks").select("*").execute()
+    df_task = pd.DataFrame(task_res.data)
+
+    if not df_task.empty:
+        pending_tasks = df_task[df_task["status"] == "待办"]
+        quadrants = {"🚀 重要且紧急": "red", "📅 重要不紧急": "orange", "⚡ 紧急不重要": "blue", "☁️ 不重要不紧急": "gray"}
+        
+        q_cols = st.columns(2)
+        for i, (q_name, q_color) in enumerate(quadrants.items()):
+            with q_cols[i % 2]:
+                st.markdown(f"**{q_name}**")
+                q_tasks = pending_tasks[pending_tasks["priority"] == q_name]
+                
+                with st.container(border=True):
+                    if q_tasks.empty:
+                        st.caption("暂无任务")
+                    else:
+                        for _, row in q_tasks.iterrows():
+                            # 计算 DDL 倒计时 (加个容错机制，防止旧数据没有deadline)
+                            try:
+                                ddl_date = datetime.datetime.strptime(row['deadline'], '%Y-%m-%d').date()
+                                days_left = (ddl_date - datetime.date.today()).days
+                            except:
+                                days_left = 999 
+                            
+                            if st.checkbox(f"{row['task_name']}", key=f"t_{row['id']}"):
+                                supabase.table("tasks").update({"status": "已完成"}).eq("id", row['id']).execute()
+                                st.rerun()
+                            
+                            # 渲染 DDL 标签
+                            if days_left < 0:
+                                st.markdown(f"<span style='color:red;font-size:12px;'>⚠️ 逾期 {abs(days_left)} 天</span>", unsafe_allow_html=True)
+                            elif days_left <= 3:
+                                st.markdown(f"<span style='color:orange;font-size:12px;'>⏳ 剩 {days_left} 天</span>", unsafe_allow_html=True)
+                            elif days_left != 999:
+                                st.markdown(f"<span style='color:gray;font-size:12px;'>📅 剩 {days_left} 天</span>", unsafe_allow_html=True)
+
+        with st.expander("✅ 查看已完成任务"):
+            done_tasks = df_task[df_task["status"] == "已完成"]
+            for _, row in done_tasks.iterrows():
+                st.write(f"~~{row['task_name']}~~")
+    else:
+        st.info("任务池空空如也，点上面添加一个吧！")
+
 
 with col_r:
     st.subheader("📚 阅读计划")
-    # 参考之前的阅读模块代码...
+    with st.form("add_read_form", clear_on_submit=True):
+        book_name = st.text_input("文献/书名", placeholder="输入书名...")
+        plan_content = st.text_input("计划内容", placeholder="精读方法论部分...")
+        if st.form_submit_button("添加计划") and book_name:
+            supabase.table("reading_plan").insert({
+                "create_date": str(datetime.date.today()), 
+                "book_name": book_name, 
+                "plan_content": plan_content, 
+                "actual_done": "", 
+                "status": "阅读中"
+            }).execute()
+            st.rerun()
+
+    read_res = supabase.table("reading_plan").select("*").execute()
+    df_read = pd.DataFrame(read_res.data)
+    
+    if not df_read.empty:
+        reading_now = df_read[df_read["status"] == "阅读中"]
+        read_done = df_read[df_read["status"] == "已读完"]
+        
+        for index, row in reading_now.iterrows():
+            with st.expander(f"📌 {row['book_name']}", expanded=False):
+                st.write(f"**计划:** {row['plan_content']}")
+                actual_done = st.text_input("笔记摘要", key=f"actual_{row['id']}", value=row['actual_done'])
+                c1, c2 = st.columns(2)
+                if c1.button("✅ 标为已读", key=f"done_{row['id']}"):
+                    supabase.table("reading_plan").update({"status": "已读完", "actual_done": actual_done}).eq("id", row['id']).execute()
+                    st.rerun()
+                if c2.button("💾 存笔记", key=f"save_{row['id']}"):
+                    supabase.table("reading_plan").update({"actual_done": actual_done}).eq("id", row['id']).execute()
+                    st.toast("笔记已同步云端！")
+        
+        if not read_done.empty:
+            st.markdown("**🏆 已读完**")
+            st.dataframe(read_done[["book_name", "actual_done"]].rename(columns={"book_name": "书名", "actual_done": "笔记"}), use_container_width=True, height=150)
 
 # ==========================================
 # 灵感区
