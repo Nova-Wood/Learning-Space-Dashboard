@@ -53,8 +53,8 @@ insert into current_status (id, is_working) values (1, false);
 create table inspirations (
   id bigint primary key generated always as identity,
   create_time text, content text, category text
-);</details> ```
-
+);</details>
+ ```
 3. 运行成功后，进入 Project Settings -> API，复制你的 Project URL 和 anon public key 保存备用。
 
 ### Step 2: 部署前端网页
@@ -65,10 +65,11 @@ create table inspirations (
 3. 选择你 Fork 的仓库，主文件路径填写 app.py。
 
 4. ⚠️ 最重要的一步：点击页面底部的 Advanced settings...，在 Secrets 文本框中按以下格式填入你刚才保存的数据库秘钥：
-
+```
 Ini, TOML
 SUPABASE_URL = "https://你的Project_URL.supabase.co"
 SUPABASE_KEY = "你的那一长串anon_public_key"
+```
 5. 点击 Deploy! 气球飘落后，你的专属系统即刻上线。
 
 ### 💻 进阶：本地开发与运行指南
