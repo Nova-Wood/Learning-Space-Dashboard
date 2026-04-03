@@ -1,3 +1,9 @@
+import streamlit as st
+import pandas as pd
+import datetime
+from supabase import create_client, Client
+import plotly.express as px
+
 # --- 基础配置 ---
 st.set_page_config(page_title="硕博科研工作流", page_icon="🎓", layout="wide")
 
@@ -12,7 +18,6 @@ if "authenticated" not in st.session_state:
 if not st.session_state.authenticated:
     st.markdown("<h2 style='text-align: center; margin-top: 100px;'>🔒 私人科研空间，闲人免进</h2>", unsafe_allow_html=True)
     
-    # 密码输入框 (type="password" 会让输入的字变成小黑点)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
         pwd = st.text_input("请输入访问密码", type="password", placeholder="输入密码后按回车或点击下方按钮")
@@ -20,7 +25,7 @@ if not st.session_state.authenticated:
             if pwd == st.secrets["APP_PASSWORD"]:
                 st.session_state.authenticated = True
                 st.toast("✅ 密码正确，欢迎回来！")
-                st.rerun() # 刷新页面，此时 authenticated 变成 True，就会跳过防盗门
+                st.rerun() 
             else:
                 st.error("❌ 密码错误，你是不是导师派来的卧底？")
     
