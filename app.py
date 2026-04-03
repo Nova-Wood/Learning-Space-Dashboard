@@ -7,6 +7,17 @@ import plotly.express as px
 # --- 基础配置 ---
 st.set_page_config(page_title="硕博科研工作流", page_icon="🎓", layout="wide")
 
+# --- 强制设置时区 (东八区 UTC+8) ---
+TZ = datetime.timezone(datetime.timedelta(hours=8))
+
+def get_now():
+    """获取东八区当前精准时间"""
+    return datetime.datetime.now(TZ)
+
+def get_today_str():
+    """获取东八区今天的日期字符串 (YYYY-MM-DD)"""
+    return get_now().date().strftime('%Y-%m-%d')
+
 # --- Supabase 连接 ---
 @st.cache_resource
 def init_connection():
@@ -39,7 +50,7 @@ with st.sidebar:
     # 统计今日时长
     logs_res = supabase.table("study_log").select("*").execute()
     df_log = pd.DataFrame(logs_res.data)
-    today_h = df_log[df_log['date'] == str(datetime.date.today())]['duration'].sum() if not df_log.empty else 0
+    today_h = df_log[df_log['date'] == get_today_str()]['duration'].sum() if not df_log.empty else 0
     st.metric("今日专注", f"{round(today_h, 1)} 小时")
     
     if cur_stat['is_working']:
@@ -72,41 +83,51 @@ for i, (p_name, p_icon) in enumerate(periods):
                 t_type = st.selectbox(f"任务-{p_name}", ["文献阅读", "论文修改", "代码实验", "组会准备"], key=f"t_{p_name}")
                 if st.button("开始签到", key=f"in_{p_name}", use_container_width=True):
                     supabase.table("current_status").update({
-                        "is_working": True, "start_time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        "location": current_loc, "task_type": t_type, "period": p_name
+                        "is_working": True, 
+                        "start_time": get_now().strftime('%Y-%m-%d %H:%M:%S'),
+                        "location": current_loc, 
+                        "task_type": t_type, 
+                        "period": p_name
                     }).eq("id", 1).execute()
                     st.rerun()
             elif cur_stat['period'] == p_name:
                 st.info(f"计时中: {cur_stat['start_time'][11:16]}")
                 note = st.text_input("进展备注", key=f"n_{p_name}")
                 if st.button("停止签退", key=f"out_{p_name}", type="primary", use_container_width=True):
-                    start_dt = datetime.datetime.strptime(cur_stat['start_time'], '%Y-%m-%d %H:%M:%S')
-                    duration = round((datetime.datetime.now() - start_dt).total_seconds()/3600, 2)
+                    start_dt = datetime.datetime.strptime(cur_stat['start_time'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=TZ)
+                    duration = round((get_now() - start_dt).total_seconds()/3600, 2)
+                    
                     supabase.table("study_log").insert({
-                        "date": str(datetime.date.today()), "period": p_name, "start_time": cur_stat['start_time'],
-                        "end_time": datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        "location": cur_stat['location'], "task_type": cur_stat['task_type'],
-                        "duration": duration, "details": note, "mood": mood
+                        "date": get_today_str(), 
+                        "period": p_name, 
+                        "start_time": cur_stat['start_time'],
+                        "end_time": get_now().strftime('%Y-%m-%d %H:%M:%S'),
+                        "location": cur_stat['location'], 
+                        "task_type": cur_stat['task_type'],
+                        "duration": duration, 
+                        "details": note, 
+                        "mood": mood
                     }).execute()
                     supabase.table("current_status").update({"is_working": False}).eq("id", 1).execute()
                     st.rerun()
             else:
                 st.button("🔒 锁定", disabled=True, use_container_width=True, key=f"lock_{p_name}")
 
+st.divider()
+
 # ==========================================
 # 功能区：任务四象限 & 阅读计划
 # ==========================================
-col_l, col_r = st.columns([1.2, 1]) # 让左边的四象限稍微宽一点点
+col_l, col_r = st.columns([1.2, 1]) 
 
 with col_l:
     st.subheader("🎯 任务管理 (四象限)")
-    
     with st.expander("➕ 新增待办任务"):
         with st.form("add_task_form", clear_on_submit=True):
             t_name = st.text_input("任务名称", placeholder="例如：修改第三章实验数据")
             col_t1, col_t2 = st.columns(2)
             with col_t1:
-                t_ddl = st.date_input("截止日期 (DDL)", datetime.date.today())
+                t_ddl = st.date_input("截止日期 (DDL)", get_now().date())
             with col_t2:
                 t_priority = st.selectbox("优先级", ["🚀 重要且紧急", "📅 重要不紧急", "⚡ 紧急不重要", "☁️ 不重要不紧急"])
             
@@ -115,13 +136,12 @@ with col_l:
                     supabase.table("tasks").insert({
                         "task_name": t_name, 
                         "status": "待办", 
-                        "create_date": str(datetime.date.today()),
+                        "create_date": get_today_str(),
                         "deadline": str(t_ddl), 
                         "priority": t_priority
                     }).execute()
                     st.rerun()
 
-    # 渲染云端的任务数据
     task_res = supabase.table("tasks").select("*").execute()
     df_task = pd.DataFrame(task_res.data)
 
@@ -140,10 +160,9 @@ with col_l:
                         st.caption("暂无任务")
                     else:
                         for _, row in q_tasks.iterrows():
-                            # 计算 DDL 倒计时 (加个容错机制，防止旧数据没有deadline)
                             try:
                                 ddl_date = datetime.datetime.strptime(row['deadline'], '%Y-%m-%d').date()
-                                days_left = (ddl_date - datetime.date.today()).days
+                                days_left = (ddl_date - get_now().date()).days
                             except:
                                 days_left = 999 
                             
@@ -151,7 +170,6 @@ with col_l:
                                 supabase.table("tasks").update({"status": "已完成"}).eq("id", row['id']).execute()
                                 st.rerun()
                             
-                            # 渲染 DDL 标签
                             if days_left < 0:
                                 st.markdown(f"<span style='color:red;font-size:12px;'>⚠️ 逾期 {abs(days_left)} 天</span>", unsafe_allow_html=True)
                             elif days_left <= 3:
@@ -174,7 +192,7 @@ with col_r:
         plan_content = st.text_input("计划内容", placeholder="精读方法论部分...")
         if st.form_submit_button("添加计划") and book_name:
             supabase.table("reading_plan").insert({
-                "create_date": str(datetime.date.today()), 
+                "create_date": get_today_str(), 
                 "book_name": book_name, 
                 "plan_content": plan_content, 
                 "actual_done": "", 
@@ -205,11 +223,48 @@ with col_r:
             st.markdown("**🏆 已读完**")
             st.dataframe(read_done[["book_name", "actual_done"]].rename(columns={"book_name": "书名", "actual_done": "笔记"}), use_container_width=True, height=150)
 
+st.divider()
+
 # ==========================================
 # 灵感区
 # ==========================================
-st.subheader("💡 灵感碎片")
-# 参考灵感收集箱代码...
+st.subheader("💡 灵感碎片收集箱")
+col_insp_in, col_insp_out = st.columns([1, 2])
+
+with col_insp_in:
+    st.caption("随时捕捉你的 Eureka Moment！")
+    with st.form("add_insp_form", clear_on_submit=True):
+        insp_content = st.text_area("记录瞬间的想法...", placeholder="例如：可以把第三章的损失函数加上一个正则化项...", height=100)
+        col_c1, col_c2 = st.columns([2, 1])
+        with col_c1:
+            insp_category = st.selectbox("灵感分类", ["🧠 科研Idea", "📝 写作思路", "🐛 代码解法", "💭 随想/吐槽"], label_visibility="collapsed")
+        with col_c2:
+            submitted_insp = st.form_submit_button("✨ 存入")
+            
+        if submitted_insp and insp_content:
+            supabase.table("inspirations").insert({
+                "create_time": get_now().strftime('%Y-%m-%d %H:%M'),
+                "content": insp_content,
+                "category": insp_category
+            }).execute()
+            st.rerun()
+
+with col_insp_out:
+    insp_res = supabase.table("inspirations").select("*").order("id", desc=True).limit(6).execute()
+    df_insp = pd.DataFrame(insp_res.data)
+    
+    if not df_insp.empty:
+        c1, c2 = st.columns(2)
+        for i, row in df_insp.iterrows():
+            with (c1 if i % 2 == 0 else c2):
+                with st.container(border=True):
+                    st.markdown(f"**{row['category']}** <span style='color:gray;font-size:12px;float:right;'>{row['create_time'][5:]}</span>", unsafe_allow_html=True)
+                    st.write(row['content'])
+                    if st.button("🗑️", key=f"del_insp_{row['id']}", help="删除这条灵感"):
+                        supabase.table("inspirations").delete().eq("id", row['id']).execute()
+                        st.rerun()
+    else:
+        st.info("暂无灵感，随时准备捕捉你的思维火花！")
 
 # ==========================================
 # 导出 Obsidian 模块
@@ -217,19 +272,27 @@ st.subheader("💡 灵感碎片")
 st.divider()
 st.subheader("📝 知识沉淀")
 if st.button("生成今日科研日报 (Markdown)"):
-    # 获取今日所有数据
-    today_data = df_log[df_log['date'] == str(datetime.date.today())]
+    today_str = get_today_str()
+    today_data = df_log[df_log['date'] == today_str] if not df_log.empty else pd.DataFrame()
     insps = supabase.table("inspirations").select("*").execute().data
     
-    md_content = f"# 科研日报 | {datetime.date.today()}\n\n"
+    md_content = f"# 科研日报 | {today_str}\n\n"
     md_content += f"## 📊 专注统计\n今日总时长：{today_h} 小时\n\n"
     md_content += "## 📝 详细进展\n"
-    for _, row in today_data.iterrows():
-        md_content += f"- **[{row['period']}]** {row['task_type']} ({row['duration']}h): {row['details']}\n"
+    
+    if not today_data.empty:
+        for _, row in today_data.iterrows():
+            md_content += f"- **[{row['period']}]** {row['task_type']} ({row['duration']}h): {row['details']}\n"
+    else:
+        md_content += "- 今日暂无打卡记录\n"
     
     md_content += "\n## 💡 灵感捕捉\n"
+    has_insp = False
     for insp in insps:
-        if insp['create_time'].startswith(str(datetime.date.today())):
+        if insp['create_time'].startswith(today_str):
             md_content += f"- [{insp['category']}] {insp['content']}\n"
+            has_insp = True
+    if not has_insp:
+        md_content += "- 今日暂无灵感记录\n"
             
-    st.download_button("下载并放入 Obsidian", data=md_content, file_name=f"Research_Log_{datetime.date.today()}.md")
+    st.download_button("下载并放入 Obsidian", data=md_content, file_name=f"Research_Log_{today_str}.md")
