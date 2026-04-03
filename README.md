@@ -85,7 +85,7 @@ SUPABASE_KEY = "你的那一长串anon_public_key"
 
 ---
 
-## 💻 极客进阶：本地开发与运行指南
+## 💻 进阶：本地开发与运行指南
 
 如果你希望在本地修改代码、增加新功能，请遵循以下环境隔离规范（避免因 C++ 编译工具缺失导致的本地报错）：
 
@@ -117,4 +117,4 @@ streamlit run app.py
 ```
 
 ---
-*Powered by Python & Streamlit | 祝各位硕博士：Paper 顺利，永不延毕！🎓*
+*Powered by Python & Streamlit | 🎓*
