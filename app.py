@@ -105,7 +105,7 @@ for i, (p_name, p_icon) in enumerate(periods):
         with st.container(border=True):
             st.markdown(f"#### {p_icon} {p_name}")
             if not cur_stat['is_working']:
-                t_type = st.selectbox(f"任务-{p_name}", ["文献阅读", "论文修改", "代码实验", "组会准备"], key=f"t_{p_name}")
+                t_type = st.selectbox(f"任务-{p_name}", ["文献阅读", "论文修改", "语言学习", "组会准备","自媒体输出"], key=f"t_{p_name}")
                 if st.button("开始签到", key=f"in_{p_name}", use_container_width=True):
                     supabase.table("current_status").update({
                         "is_working": True, 
