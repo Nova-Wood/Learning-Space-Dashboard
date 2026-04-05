@@ -1,46 +1,71 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import calendar
 from supabase import create_client, Client
 import plotly.express as px
 
 # --- 基础配置 ---
-st.set_page_config(page_title="硕博科研工作流", page_icon="🎓", layout="wide")
+st.set_page_config(page_title="硕博科研工作流", page_icon="🌿", layout="wide")
+
+# ==========================================
+# 🎨 注入淡绿色系主题 CSS
+# ==========================================
+st.markdown("""
+<style>
+    /* 1. 网页整体全局背景 - 极淡薄荷绿 */
+    .stApp { background-color: #F2FBF5; }
+    
+    /* 2. 侧边栏背景 - 稍微加深的抹茶绿 */
+    [data-testid="stSidebar"] { background-color: #E8F5E9 !important; }
+    
+    /* 3. 所有的卡片/边框背景变白，增加呼吸感和极浅绿阴影 */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #FFFFFF;
+        border: 1px solid #C8E6C9 !important;
+        border-radius: 12px;
+        box-shadow: 0 4px 10px rgba(165, 214, 167, 0.15);
+    }
+    
+    /* 4. 隐藏顶部自带的彩色进度条 */
+    [data-testid="stHeader"] { background-color: transparent; }
+</style>
+""", unsafe_allow_html=True)
+
+# 定义一个渲染不同深浅绿色模块标题的辅助函数
+def module_header(title, bg_color, border_color):
+    st.markdown(f"""
+    <div style="background-color: {bg_color}; padding: 12px 15px; border-radius: 10px; margin-bottom: 15px; border-left: 6px solid {border_color}; display: flex; align-items: center;">
+        <h3 style="margin: 0; color: #2E7D32; font-size: 20px;">{title}</h3>
+    </div>
+    """, unsafe_allow_html=True)
 
 # ==========================================
 # 🔒 核心安全防盗门
 # ==========================================
-# 1. 检查当前设备是否已经登录过
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
-# 2. 如果没登录，显示密码输入框并拦截后续代码
 if not st.session_state.authenticated:
-    st.markdown("<h2 style='text-align: center; margin-top: 100px;'>🔒 私人科研空间，闲人免进</h2>", unsafe_allow_html=True)
-    
+    st.markdown("<h2 style='text-align: center; margin-top: 100px; color: #388E3C;'>🌿 专属科研空间，闲人免进</h2>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        pwd = st.text_input("请输入访问密码", type="password", placeholder="输入密码后按回车或点击下方按钮")
+        pwd = st.text_input("请输入访问密码", type="password", placeholder="输入密码后按回车")
         if st.button("🗝️ 开锁进入", use_container_width=True):
             if pwd == st.secrets["APP_PASSWORD"]:
                 st.session_state.authenticated = True
-                st.toast("✅ 密码正确，欢迎回来！")
                 st.rerun() 
             else:
-                st.error("❌ 密码错误，你是不是导师派来的卧底？")
-    
-    # 关键：阻断程序，只要没登录，下面的打卡代码绝对不会执行！
+                st.error("❌ 密码错误")
     st.stop() 
 
 # --- 强制设置时区 (东八区 UTC+8) ---
 TZ = datetime.timezone(datetime.timedelta(hours=8))
 
 def get_now():
-    """获取东八区当前精准时间"""
     return datetime.datetime.now(TZ)
 
 def get_today_str():
-    """获取东八区今天的日期字符串 (YYYY-MM-DD)"""
     return get_now().date().strftime('%Y-%m-%d')
 
 # --- Supabase 连接 ---
@@ -58,43 +83,87 @@ def load_base_info():
 
 user_config, cur_stat = load_base_info()
 
+# 获取所有打卡记录用于日历和统计
+logs_res = supabase.table("study_log").select("*").execute()
+df_log = pd.DataFrame(logs_res.data)
+
 # ==========================================
-# 侧边栏：状态与设置
+# 侧边栏：仪表盘 & 专属日历
 # ==========================================
 with st.sidebar:
-    st.title("🎓 仪表盘")
-    with st.expander("⚙️ 系统个性化"):
-        with st.form("conf_f"):
-            n_name = st.text_input("系统名", user_config['system_name'])
-            n_motto = st.text_input("今日目标", user_config['daily_motto'])
-            if st.form_submit_button("更新"):
-                supabase.table("system_config").update({"system_name": n_name, "daily_motto": n_motto}).eq("id", 1).execute()
-                st.rerun()
+    st.markdown("<h2 style='color: #2E7D32;'>🌿 仪表盘</h2>", unsafe_allow_html=True)
     
-    st.divider()
+    # --- 渲染打卡日历 ---
+    today_dt = get_now()
+    this_year, this_month = today_dt.year, today_dt.month
+    
+    # 提取这个月打过卡的日期
+    checked_in_days = []
+    if not df_log.empty:
+        df_log['date_obj'] = pd.to_datetime(df_log['date'])
+        monthly_logs = df_log[(df_log['date_obj'].dt.month == this_month) & (df_log['date_obj'].dt.year == this_year)]
+        checked_in_days = monthly_logs['date_obj'].dt.day.unique()
+
+    # 构建 HTML 日历
+    cal = calendar.monthcalendar(this_year, this_month)
+    cal_html = f"""
+    <div style='background-color:#FFFFFF; padding:15px; border-radius:12px; border: 1px solid #C8E6C9; margin-bottom:20px; box-shadow: 0 2px 5px rgba(0,0,0,0.02);'>
+        <h4 style='text-align:center; color:#388E3C; margin-top:0;'>📅 {this_year}年 {this_month}月打卡</h4>
+        <table style='width:100%; text-align:center; font-size:13px; border-collapse: collapse;'>
+            <tr style='color:#81C784;'><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th><th>日</th></tr>
+    """
+    for week in cal:
+        cal_html += "<tr>"
+        for day in week:
+            if day == 0:
+                cal_html += "<td></td>"
+            elif day in checked_in_days:
+                # 已经打卡的日期：绿底白字
+                cal_html += f"<td><div style='background-color:#66BB6A; color:white; border-radius:50%; width:26px; height:26px; line-height:26px; margin:auto; font-weight:bold;'>{day}</div></td>"
+            elif day == today_dt.day:
+                # 今天但没打卡：绿色边框圈出
+                cal_html += f"<td><div style='border:2px solid #66BB6A; color:#388E3C; border-radius:50%; width:26px; height:26px; line-height:22px; margin:auto; font-weight:bold;'>{day}</div></td>"
+            else:
+                # 普通日期
+                cal_html += f"<td style='color:#9E9E9E; height:32px;'>{day}</td>"
+        cal_html += "</tr>"
+    cal_html += "</table></div>"
+    
+    st.markdown(cal_html, unsafe_allow_html=True)
+    # --- 日历渲染结束 ---
+
     # 统计今日时长
-    logs_res = supabase.table("study_log").select("*").execute()
-    df_log = pd.DataFrame(logs_res.data)
     today_h = df_log[df_log['date'] == get_today_str()]['duration'].sum() if not df_log.empty else 0
     st.metric("今日专注", f"{round(today_h, 1)} 小时")
     
     if cur_stat['is_working']:
-        st.success(f"正在进行: {cur_stat['task_type']}")
+        st.success(f"🟢 正在进行: {cur_stat['task_type']}")
     else:
-        st.write("⚪ 当前空闲")
+        st.info("⚪ 当前空闲")
+
+    with st.expander("⚙️ 系统个性化设置"):
+        with st.form("conf_f"):
+            n_name = st.text_input("系统名", user_config['system_name'])
+            n_motto = st.text_input("今日目标", user_config['daily_motto'])
+            if st.form_submit_button("保存设置"):
+                supabase.table("system_config").update({"system_name": n_name, "daily_motto": n_motto}).eq("id", 1).execute()
+                st.rerun()
 
 # ==========================================
 # 顶部：欢迎语
 # ==========================================
-st.markdown(f"<h1 style='text-align: center;'>{user_config['system_name']}</h1>", unsafe_allow_html=True)
-st.markdown(f"<p style='text-align: center; color: #4A90E2;'>{user_config['daily_motto']}</p>", unsafe_allow_html=True)
-st.divider()
+st.markdown(f"<h1 style='text-align: center; color: #2E7D32;'>{user_config['system_name']}</h1>", unsafe_allow_html=True)
+st.markdown(f"<p style='text-align: center; color: #66BB6A;'>{user_config['daily_motto']}</p>", unsafe_allow_html=True)
+st.write("") 
 
 # ==========================================
-# 核心区：打卡与计时 (四模块布局)
+# 模块1：打卡与计时 (色号：豆绿 #E8F5E9)
 # ==========================================
-st.markdown("### 🕒 实时打卡中心")
-mood = st.select_slider("当前心情状态", options=["😫", "😐", "😊", "🎉"], value="😊")
+module_header("🕒 实时打卡中心", bg_color="#E8F5E9", border_color="#81C784")
+
+st.markdown("**💙 当前心情 (点击选择)**")
+# 心情改为纯点击按钮形态 (横向 Radio)
+mood = st.radio("心情", ["😫 疲惫", "😐 平静", "😊 开心", "🎉 狂喜"], horizontal=True, label_visibility="collapsed")
 current_loc = st.radio("所在地", ["工位", "图书馆", "宿舍", "其他"], horizontal=True)
 
 periods = [("上午", "🌅"), ("下午", "☀️"), ("晚上", "🌙"), ("深夜", "🦉")]
@@ -103,10 +172,10 @@ p_cols = st.columns(4)
 for i, (p_name, p_icon) in enumerate(periods):
     with p_cols[i]:
         with st.container(border=True):
-            st.markdown(f"#### {p_icon} {p_name}")
+            st.markdown(f"<h4 style='color:#388E3C; margin:0;'>{p_icon} {p_name}</h4>", unsafe_allow_html=True)
             if not cur_stat['is_working']:
-                t_type = st.selectbox(f"任务-{p_name}", ["文献阅读", "论文修改", "语言学习", "组会准备","自媒体输出"], key=f"t_{p_name}")
-                if st.button("开始签到", key=f"in_{p_name}", use_container_width=True):
+                t_type = st.selectbox(f"任务-{p_name}", ["文献阅读", "论文修改", "代码实验", "组会准备"], key=f"t_{p_name}", label_visibility="collapsed")
+                if st.button("▶️ 开始", key=f"in_{p_name}", use_container_width=True):
                     supabase.table("current_status").update({
                         "is_working": True, 
                         "start_time": get_now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -117,8 +186,8 @@ for i, (p_name, p_icon) in enumerate(periods):
                     st.rerun()
             elif cur_stat['period'] == p_name:
                 st.info(f"计时中: {cur_stat['start_time'][11:16]}")
-                note = st.text_input("进展备注", key=f"n_{p_name}")
-                if st.button("停止签退", key=f"out_{p_name}", type="primary", use_container_width=True):
+                note = st.text_input("进展备注", key=f"n_{p_name}", placeholder="简单记录...", label_visibility="collapsed")
+                if st.button("⏹️ 签退", key=f"out_{p_name}", type="primary", use_container_width=True):
                     start_dt = datetime.datetime.strptime(cur_stat['start_time'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=TZ)
                     duration = round((get_now() - start_dt).total_seconds()/3600, 2)
                     
@@ -138,15 +207,17 @@ for i, (p_name, p_icon) in enumerate(periods):
             else:
                 st.button("🔒 锁定", disabled=True, use_container_width=True, key=f"lock_{p_name}")
 
-st.divider()
+st.write("")
 
 # ==========================================
-# 功能区：任务四象限 & 阅读计划
+# 模块2 & 3：任务四象限 & 阅读计划
 # ==========================================
 col_l, col_r = st.columns([1.2, 1]) 
 
 with col_l:
-    st.subheader("🎯 任务管理 (四象限)")
+    # 任务模块 (色号：极浅青葱 #E0F2F1)
+    module_header("🎯 任务四象限", bg_color="#E0F2F1", border_color="#4DB6AC")
+    
     with st.expander("➕ 新增待办任务"):
         with st.form("add_task_form", clear_on_submit=True):
             t_name = st.text_input("任务名称", placeholder="例如：修改第三章实验数据")
@@ -179,7 +250,6 @@ with col_l:
             with q_cols[i % 2]:
                 st.markdown(f"**{q_name}**")
                 q_tasks = pending_tasks[pending_tasks["priority"] == q_name]
-                
                 with st.container(border=True):
                     if q_tasks.empty:
                         st.caption("暂无任务")
@@ -207,14 +277,16 @@ with col_l:
             for _, row in done_tasks.iterrows():
                 st.write(f"~~{row['task_name']}~~")
     else:
-        st.info("任务池空空如也，点上面添加一个吧！")
+        st.info("任务池空空如也！")
 
 
 with col_r:
-    st.subheader("📚 阅读计划")
+    # 阅读计划 (色号：抹茶浅绿 #F1F8E9)
+    module_header("📚 阅读计划", bg_color="#F1F8E9", border_color="#AED581")
+    
     with st.form("add_read_form", clear_on_submit=True):
-        book_name = st.text_input("文献/书名", placeholder="输入书名...")
-        plan_content = st.text_input("计划内容", placeholder="精读方法论部分...")
+        book_name = st.text_input("文献/书名", placeholder="输入书名...", label_visibility="collapsed")
+        plan_content = st.text_input("计划内容", placeholder="精读方法论部分...", label_visibility="collapsed")
         if st.form_submit_button("添加计划") and book_name:
             supabase.table("reading_plan").insert({
                 "create_date": get_today_str(), 
@@ -248,18 +320,19 @@ with col_r:
             st.markdown("**🏆 已读完**")
             st.dataframe(read_done[["book_name", "actual_done"]].rename(columns={"book_name": "书名", "actual_done": "笔记"}), use_container_width=True, height=150)
 
-st.divider()
+st.write("")
 
 # ==========================================
-# 灵感区
+# 模块4：灵感区 (色号：开心果绿 #DCEDC8)
 # ==========================================
-st.subheader("💡 灵感碎片收集箱")
+module_header("💡 灵感碎片收集箱", bg_color="#DCEDC8", border_color="#9CCC65")
+
 col_insp_in, col_insp_out = st.columns([1, 2])
 
 with col_insp_in:
     st.caption("随时捕捉你的 Eureka Moment！")
     with st.form("add_insp_form", clear_on_submit=True):
-        insp_content = st.text_area("记录瞬间的想法...", placeholder="例如：可以把第三章的损失函数加上一个正则化项...", height=100)
+        insp_content = st.text_area("记录瞬间的想法...", placeholder="例如：损失函数加个正则化项...", height=100, label_visibility="collapsed")
         col_c1, col_c2 = st.columns([2, 1])
         with col_c1:
             insp_category = st.selectbox("灵感分类", ["🧠 科研Idea", "📝 写作思路", "🐛 代码解法", "💭 随想/吐槽"], label_visibility="collapsed")
@@ -285,18 +358,17 @@ with col_insp_out:
                 with st.container(border=True):
                     st.markdown(f"**{row['category']}** <span style='color:gray;font-size:12px;float:right;'>{row['create_time'][5:]}</span>", unsafe_allow_html=True)
                     st.write(row['content'])
-                    if st.button("🗑️", key=f"del_insp_{row['id']}", help="删除这条灵感"):
+                    if st.button("🗑️", key=f"del_insp_{row['id']}", help="删除"):
                         supabase.table("inspirations").delete().eq("id", row['id']).execute()
                         st.rerun()
     else:
         st.info("暂无灵感，随时准备捕捉你的思维火花！")
 
 # ==========================================
-# 导出 Obsidian 模块
+# 模块5：知识沉淀导出 (保持极简留白)
 # ==========================================
 st.divider()
-st.subheader("📝 知识沉淀")
-if st.button("生成今日科研日报 (Markdown)"):
+if st.button("📝 生成今日科研日报 (导出至 Obsidian)"):
     today_str = get_today_str()
     today_data = df_log[df_log['date'] == today_str] if not df_log.empty else pd.DataFrame()
     insps = supabase.table("inspirations").select("*").execute().data
