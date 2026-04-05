@@ -2,9 +2,9 @@
 
 ![Python](https://img.shields.io/badge/Python-3.12-blue) ![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B) ![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E)
 
-告别碎片化的纸质手账与笨重的效率软件。这是一个基于 Python + Streamlit + Supabase 打造的**全平台、云同步、高定制度**的科研日常管理看板。
+告别碎片化的纸质手账与笨重的效率软件。这是一个基于 Python + Streamlit + Supabase 打造的**全平台、云同步、高定制度**的科研日常管理看板。(灵感来自小红书@yuyu）
 
-它不仅是一个打卡器，更是一个融合了**「时间追踪 + 艾森豪矩阵 + 知识沉淀 (Obsidian联动)」**的专属科研操作系统。
+它不仅是一个打卡器，更是一个融合了「时间追踪 + 艾森豪矩阵 + 知识沉淀 (Obsidian联动)」的专属科研操作系统。
 
 ---
 
