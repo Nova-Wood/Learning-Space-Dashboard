@@ -5,6 +5,7 @@
 告别碎片化的纸质手账与笨重的效率软件。这是一个基于 Python + Streamlit + Supabase 打造的**全平台、云同步、高定制度**的科研日常管理看板。(灵感来自小红书@yuyu）
 
 它不仅是一个打卡器，更是一个融合了「时间追踪 + 艾森豪矩阵 + 知识沉淀 (Obsidian联动)」的专属科研操作系统。
+<img width="1912" height="960" alt="2593453bd87c28323ef14d141237102" src="https://github.com/user-attachments/assets/386f14a1-2874-4733-b51c-79bf8fed73e0" />
 
 ---
 
