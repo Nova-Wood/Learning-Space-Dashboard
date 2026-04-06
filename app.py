@@ -197,7 +197,7 @@ for i, (p_name, p_icon) in enumerate(periods):
         with st.container(border=True):
             st.markdown(f"<h4 style='color:#388E3C; margin:0;'>{p_icon} {p_name}</h4>", unsafe_allow_html=True)
             if not cur_stat['is_working']:
-                t_type = st.selectbox(f"任务-{p_name}", ["文献阅读", "论文修改", "代码实验", "组会准备"], key=f"t_{p_name}", label_visibility="collapsed")
+                t_type = st.selectbox(f"任务-{p_name}", ["文献阅读", "论文修改", "语言学习", "组会准备"], key=f"t_{p_name}", label_visibility="collapsed")
                 if st.button("▶️ 开始", key=f"in_{p_name}", use_container_width=True):
                     supabase.table("current_status").update({"is_working": True, "start_time": get_now().strftime('%Y-%m-%d %H:%M:%S'), "location": current_loc, "task_type": t_type, "period": p_name}).eq("id", 1).execute()
                     st.rerun()
