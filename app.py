@@ -120,15 +120,13 @@ with st.sidebar:
             supabase.table("daily_routines").update({"breakfast": b, "lunch": l, "dinner": d, "early_sleep": es, "early_wake": ew}).eq("date", get_today_str()).execute()
             st.rerun()
 
-    # 3. 月度专注分布图 (新增看板)
+    # 3. 月度专注分布图
     if not df_log.empty:
         df_log['date_obj'] = pd.to_datetime(df_log['date'])
         curr_month_df = df_log[df_log['date_obj'].dt.month == today_dt.month]
         
         if not curr_month_df.empty:
             st.markdown("<p style='color:#2E7D32; font-weight:bold; margin-top:10px; margin-bottom:5px;'>📊 月度专注洞察</p>", unsafe_allow_html=True)
-            
-            # --- 新增：时段时长统计显示 ---
             today_total = curr_month_df[curr_month_df['date_obj'].dt.date == today_dt.date()]['duration'].sum()
             month_total = curr_month_df['duration'].sum()
             
@@ -139,13 +137,11 @@ with st.sidebar:
             </div>
             """, unsafe_allow_html=True)
             
-            # 趋势图
             daily_stats = curr_month_df.groupby(curr_month_df['date_obj'].dt.day)['duration'].sum().reset_index()
             fig_trend = px.area(daily_stats, x='date_obj', y='duration', color_discrete_sequence=['#81C784'])
             fig_trend.update_layout(height=140, margin=dict(l=0,r=0,t=5,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
             st.plotly_chart(fig_trend, use_container_width=True, config={'displayModeBar': False})
             
-            # 饼图
             period_stats = curr_month_df.groupby('period')['duration'].sum().reset_index()
             fig_pie = px.pie(period_stats, values='duration', names='period', color_discrete_sequence=['#C8E6C9','#A5D6A7','#81C784','#66BB6A'])
             fig_pie.update_layout(height=180, margin=dict(l=0,r=0,t=0,b=0), showlegend=False)
@@ -173,35 +169,78 @@ with st.sidebar:
 st.markdown(f"<h1 style='text-align: center; color: #2E7D32;'>{user_config['system_name']}</h1>", unsafe_allow_html=True)
 st.markdown(f"<p style='text-align: center; color: #66BB6A;'>{user_config['daily_motto']}</p>", unsafe_allow_html=True)
 
-# --- 模块1：打卡中心 ---
+# --- 模块1：打卡中心 (全新升级闭环结构) ---
 module_header("🕒 实时打卡中心", bg_color="#E8F5E9", border_color="#81C784")
-mood = st.radio("心情", ["😫 疲惫", "😐 平静", "😊 开心", "🎉 狂喜"], horizontal=True, label_visibility="collapsed")
-current_loc = st.radio("所在地", ["工位", "图书馆", "宿舍", "其他"], horizontal=True)
 
 periods = [("上午", "🌅"), ("下午", "☀️"), ("晚上", "🌙"), ("深夜", "🦉")]
 p_cols = st.columns(4)
+
 for i, (p_name, p_icon) in enumerate(periods):
     with p_cols[i]:
         with st.container(border=True):
-            st.markdown(f"<h4 style='color:#388E3C; margin:0;'>{p_icon} {p_name}</h4>", unsafe_allow_html=True)
+            st.markdown(f"<h4 style='color:#388E3C; margin:0; margin-bottom:12px;'>{p_icon} {p_name}</h4>", unsafe_allow_html=True)
+            
+            # 【状态 A：尚未开始】 -> 选地点、选任务
             if not cur_stat['is_working']:
-                t_type = st.selectbox(f"任务-{p_name}", ["文献阅读", "论文修改", "代码实验", "组会准备"], key=f"t_{p_name}", label_visibility="collapsed")
-                if st.button("▶️ 开始", key=f"in_{p_name}", use_container_width=True):
-                    supabase.table("current_status").update({"is_working": True, "start_time": get_now().strftime('%Y-%m-%d %H:%M:%S'), "location": current_loc, "task_type": t_type, "period": p_name}).eq("id", 1).execute()
+                st.markdown("<div style='font-size:12px; color:#81C784; margin-bottom:2px;'>📍 所在地</div>", unsafe_allow_html=True)
+                loc_type = st.selectbox("所在地", ["教学楼", "图书馆", "宿舍"], key=f"loc_{p_name}", label_visibility="collapsed")
+                
+                st.markdown("<div style='font-size:12px; color:#81C784; margin-bottom:2px; margin-top:8px;'>🎯 专注任务</div>", unsafe_allow_html=True)
+                t_type = st.selectbox("任务", ["文献阅读", "论文修改", "组会准备", "地图制作"], key=f"t_{p_name}", label_visibility="collapsed")
+                
+                st.write("") # 增加一点呼吸感
+                if st.button("▶️ 开始签到", key=f"in_{p_name}", use_container_width=True):
+                    supabase.table("current_status").update({
+                        "is_working": True, 
+                        "start_time": get_now().strftime('%Y-%m-%d %H:%M:%S'), 
+                        "location": loc_type, 
+                        "task_type": t_type, 
+                        "period": p_name
+                    }).eq("id", 1).execute()
                     st.rerun()
+                    
+            # 【状态 B：正在进行中】 -> 显示信息，签退时选心情、写备注
             elif cur_stat['period'] == p_name:
-                st.info(f"计时中: {cur_stat['start_time'][11:16]}")
-                note = st.text_input("备注", key=f"n_{p_name}", label_visibility="collapsed")
-                if st.button("⏹️ 签退", key=f"out_{p_name}", type="primary", use_container_width=True):
+                # 锁定显示刚才选的地点和任务
+                st.markdown(f"""
+                <div style='background-color:#E8F5E9; padding:8px; border-radius:5px; margin-bottom:10px; font-size:13px; color:#388E3C;'>
+                    <b>📍 {cur_stat['location']}</b> <br>
+                    <b>🎯 {cur_stat['task_type']}</b> <br>
+                    <span style='color:#66BB6A;'>⏱️ {cur_stat['start_time'][11:16]} 开始</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+                st.markdown("<div style='font-size:12px; color:#81C784; margin-bottom:2px;'>💙 结束心情</div>", unsafe_allow_html=True)
+                end_mood = st.selectbox("心情", ["😫 疲惫", "😐 平静", "😊 开心", "🎉 狂喜"], key=f"mood_{p_name}", index=2, label_visibility="collapsed")
+                
+                st.markdown("<div style='font-size:12px; color:#81C784; margin-bottom:2px; margin-top:8px;'>📝 进展备注</div>", unsafe_allow_html=True)
+                note = st.text_input("备注", key=f"n_{p_name}", placeholder="简述进展...", label_visibility="collapsed")
+                
+                st.write("")
+                if st.button("⏹️ 结束签退", key=f"out_{p_name}", type="primary", use_container_width=True):
                     start_dt = datetime.datetime.strptime(cur_stat['start_time'], '%Y-%m-%d %H:%M:%S').replace(tzinfo=TZ)
                     duration = round((get_now() - start_dt).total_seconds()/3600, 2)
-                    supabase.table("study_log").insert({"date": get_today_str(), "period": p_name, "start_time": cur_stat['start_time'], "end_time": get_now().strftime('%Y-%m-%d %H:%M:%S'), "location": cur_stat['location'], "task_type": cur_stat['task_type'], "duration": duration, "details": note, "mood": mood}).execute()
+                    supabase.table("study_log").insert({
+                        "date": get_today_str(), 
+                        "period": p_name, 
+                        "start_time": cur_stat['start_time'], 
+                        "end_time": get_now().strftime('%Y-%m-%d %H:%M:%S'), 
+                        "location": cur_stat['location'], 
+                        "task_type": cur_stat['task_type'], 
+                        "duration": duration, 
+                        "details": note, 
+                        "mood": end_mood  # 将此处记录的心情存入数据库
+                    }).execute()
                     supabase.table("current_status").update({"is_working": False}).eq("id", 1).execute()
                     st.rerun()
+                    
+            # 【状态 C：其它时间段正在计时】 -> 锁定
             else:
-                st.button("🔒", disabled=True, use_container_width=True, key=f"lock_{p_name}")
+                st.button("🔒 其它时段进行中", disabled=True, use_container_width=True, key=f"lock_{p_name}")
 
-# --- 模块2：任务与阅读 (已修复 DDL 显示) ---
+st.write("")
+
+# --- 模块2：任务与阅读 ---
 c_left, c_right = st.columns([1.2, 1])
 with c_left:
     module_header("🎯 任务四象限", bg_color="#E0F2F1", border_color="#4DB6AC")
@@ -226,7 +265,6 @@ with c_left:
                 with st.container(border=True):
                     if sub.empty: st.caption("暂无")
                     for _, r in sub.iterrows():
-                        # --- 修复 DDL 计算与显示 ---
                         try:
                             ddl_date = datetime.datetime.strptime(r['deadline'], '%Y-%m-%d').date()
                             days_left = (ddl_date - get_now().date()).days
@@ -292,5 +330,40 @@ with ci2:
 # --- 模块4：Obsidian 导出 ---
 st.divider()
 if st.button("📝 导出今日日报 (Obsidian)"):
-    # (保持之前的导出逻辑不变)
+    today_str = get_today_str()
+    today_data = df_log[df_log['date'] == today_str] if not df_log.empty else pd.DataFrame()
+    insps = supabase.table("inspirations").select("*").execute().data
+    today_rout_export = df_routines[df_routines['date'] == today_str].iloc[0] if not df_routines[df_routines['date'] == today_str].empty else None
+    
+    md_content = f"# 科研日报 | {today_str}\n\n"
+    
+    md_content += "## 🥗 习惯打卡\n"
+    if today_rout_export is not None:
+        md_content += f"- 早餐: {'✅' if today_rout_export['breakfast'] else '❌'} | "
+        md_content += f"午餐: {'✅' if today_rout_export['lunch'] else '❌'} | "
+        md_content += f"晚餐: {'✅' if today_rout_export['dinner'] else '❌'}\n"
+        md_content += f"- 早睡: {'✅' if today_rout_export['early_sleep'] else '❌'} | "
+        md_content += f"早起: {'✅' if today_rout_export['early_wake'] else '❌'}\n\n"
+
+    today_h = today_data['duration'].sum() if not today_data.empty else 0
+    md_content += f"## 📊 专注统计\n今日总时长：{today_h} 小时\n\n"
+    md_content += "## 📝 详细进展\n"
+    
+    if not today_data.empty:
+        for _, row in today_data.iterrows():
+            # 这里也顺带优化了导出格式，把最后的心情加进去了
+            md_content += f"- **[{row['period']}]** {row['task_type']} ({row['duration']}h) {row['mood']}: {row['details']}\n"
+    else:
+        md_content += "- 今日暂无打卡记录\n"
+    
+    md_content += "\n## 💡 灵感捕捉\n"
+    has_insp = False
+    for insp in insps:
+        if insp['create_time'].startswith(today_str):
+            md_content += f"- [{insp['category']}] {insp['content']}\n"
+            has_insp = True
+    if not has_insp:
+        md_content += "- 今日暂无灵感记录\n"
+            
+    st.download_button("下载并放入 Obsidian", data=md_content, file_name=f"Research_Log_{today_str}.md")
     st.toast("日报生成成功，请点击下载。")
