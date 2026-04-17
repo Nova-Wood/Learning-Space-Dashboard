@@ -33,11 +33,20 @@ def module_header(title, bg_color, border_color):
     """, unsafe_allow_html=True)
 
 # ==========================================
-# 🔒 核心安全防盗门
+# 🔒 核心安全防盗门 (新增 Magic Link 免密通道)
 # ==========================================
 if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
+# --- 新增：检查 URL 中是否携带了免密钥匙 ---
+if not st.session_state.authenticated:
+    # 如果网址最后带有 ?key=你的密码，就直接放行
+    if "key" in st.query_params and st.query_params["key"] == st.secrets["APP_PASSWORD"]:
+        st.session_state.authenticated = True
+        # 🔑 极客细节：验证成功后，立刻将网址里的密码抹除，防止别人偷看你的屏幕或被截图
+        st.query_params.clear()
+
+# 拦截界面（如果没有免密钥匙，或者没登录过，就显示密码框）
 if not st.session_state.authenticated:
     st.markdown("<h2 style='text-align: center; margin-top: 100px; color: #388E3C;'>🌿 专属科研空间</h2>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
