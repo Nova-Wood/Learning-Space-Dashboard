@@ -57,6 +57,10 @@ class AppTests(unittest.TestCase):
         button(self.at,'添加到 Google 日历').click().run()
         self.assertFalse(self.at.exception)
         self.assertEqual(len(self.at.session_state['demo_events']),2)
+        button(self.at,'添加到 Google 日历').click().run()
+        self.assertFalse(self.at.exception)
+        self.assertFalse(self.at.warning)
+        self.assertEqual(len(self.at.session_state['demo_events']),2)
 
     def test_empty_title_rejected(self):
         self.page('任务与日程')

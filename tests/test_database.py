@@ -123,3 +123,9 @@ class DatabaseTests(unittest.TestCase):
         self.db.execute("insert into inspirations(create_time,content,category) values('2026-09-24 12:00','保留的想法','想法')")
         self.db.execute(self.migration)
         self.assertEqual(self.db.execute('select content from inspirations').fetchone()[0],'保留的想法')
+
+    def test_legacy_habit_table_without_id(self):
+        self.db.execute('alter table daily_routines drop column id')
+        self.db.execute("insert into daily_routines(date,breakfast) values('2026-09-24',true)")
+        self.db.execute(self.migration)
+        self.assertEqual(self.db.execute('select date,breakfast from daily_routines order by id').fetchall(), [('2026-09-24',True)])

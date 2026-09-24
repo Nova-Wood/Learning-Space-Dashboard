@@ -36,6 +36,8 @@ create table if not exists public.daily_routines (
 
 alter table public.current_status add column if not exists session_id uuid;
 alter table public.study_log add column if not exists session_id uuid;
+-- Some manually created legacy habit tables used date as their only primary key.
+alter table public.daily_routines add column if not exists id bigint generated always as identity;
 update public.current_status set session_id = gen_random_uuid()
   where is_working is true and session_id is null;
 

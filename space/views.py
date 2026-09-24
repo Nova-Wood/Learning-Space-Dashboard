@@ -39,7 +39,11 @@ def show_events(events, limit=None):
     if not events: empty("这段时间还没有安排。留一点空白，也很好。")
     for event in events[:limit] if limit else events:
         start, end, all_day = event_span(event)
-        label = f"{start:%m月%d日} · 全天" if all_day else f"{start:%m月%d日 %H:%M} — {end:%m月%d日 %H:%M}"
+        if all_day:
+            last_day = end - timedelta(days=1)
+            label = f"{start:%m月%d日} · 全天" if start.date() == last_day.date() else f"{start:%m月%d日} — {last_day:%m月%d日} · 全天"
+        else:
+            label = f"{start:%m月%d日 %H:%M} — {end:%m月%d日 %H:%M}"
         st.markdown(f'<div class="agenda-row"><b>{safe_html(event.get("summary") or "未命名日程")}</b>'
                     f'<small>{safe_html(label)} {safe_html(event.get("location", ""))}</small></div>', unsafe_allow_html=True)
         link = safe_google_link(event.get("htmlLink"))
@@ -183,15 +187,16 @@ def planner(repo, calendar, today):
             begin = datetime.combine(day_start, time_start, TZ)
             end = datetime.combine(day_end, time_end, TZ)
             if end <= begin: raise ValueError("结束时间必须晚于开始时间。")
-            conflicts = overlapping_events(calendar.events(begin, end), begin, end)
+            payload = f"{title}|{begin.isoformat()}|{end.isoformat()}|{description}"
+            digest = hashlib.sha256(payload.encode()).hexdigest()
+            ids = st.session_state.setdefault("calendar_request_ids", {})
+            event_id = ids.setdefault(digest, uuid.uuid4().hex)
+            conflicts = [e for e in overlapping_events(calendar.events(begin, end), begin, end)
+                         if e.get("id") != event_id]
             if conflicts and not allow_overlap:
                 st.warning("这个时段已有安排。请调整时间，或勾选允许冲突后再次提交。")
                 for item in conflicts: st.write(item.get("summary", "已有日程"))
             else:
-                payload = f"{title}|{begin.isoformat()}|{end.isoformat()}|{description}"
-                digest = hashlib.sha256(payload.encode()).hexdigest()
-                ids = st.session_state.setdefault("calendar_request_ids", {})
-                event_id = ids.setdefault(digest, uuid.uuid4().hex)
                 calendar.create_event(event_id, title, begin, end, description)
                 notice("已安排到 Google 日历。任务完成状态保持独立。")
 
