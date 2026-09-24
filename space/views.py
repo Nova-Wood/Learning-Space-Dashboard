@@ -6,7 +6,7 @@ import plotly.express as px
 import streamlit as st
 from .calendar_client import CalendarError
 from .domain import (TZ, HABITS, PERIODS, PRIORITIES, now, required_text, safe_html,
-                     safe_google_link, event_span, overlapping_events, markdown_report)
+                     safe_google_link, event_span, overlapping_events, markdown_report, duration_hours, valid_duration)
 
 
 def notice(message):
@@ -82,12 +82,15 @@ def overview(repo, calendar, config, logs, status, today):
     st.markdown(f'<div class="hero"><div class="eyebrow">YOUR QUIET CORNER · {today:%Y / %m / %d}</div>'
                 f'<h2>{greeting}，让研究慢慢生长。</h2><p>{safe_html(config.get("daily_motto"))}</p></div>', unsafe_allow_html=True)
     tasks = repo.rows("tasks", [("eq", "status", "待办")])
-    today_hours = sum(float(r.get("duration") or 0) for r in logs if r["date"] == str(today))
-    month_hours = sum(float(r.get("duration") or 0) for r in logs)
+    today_hours = sum(duration_hours(r.get("duration")) for r in logs if r["date"] == str(today))
+    month_hours = sum(duration_hours(r.get("duration")) for r in logs)
     a, b, c = st.columns(3)
     a.metric("今日已完成专注", f"{today_hours:.1f} h")
     b.metric("本月累计", f"{month_hours:.1f} h")
     c.metric("等待推进的任务", f"{len(tasks):02d}")
+    invalid = sum(not valid_duration(r.get("duration")) for r in logs)
+    if invalid:
+        st.warning(f"本月有 {invalid} 条历史时长异常，已排除统计；原始记录保留在「记录与统计」中。")
     left, right = st.columns([1.15, 1], gap="large")
     with left:
         focus_card(repo, status)
@@ -258,17 +261,20 @@ def history(repo, today):
     routines = repo.month_data("daily_routines", chosen)
     if logs:
         df = pd.DataFrame(logs)
-        df["duration"] = pd.to_numeric(df["duration"], errors="coerce").fillna(0)
+        invalid = sum(not valid_duration(r.get("duration")) for r in logs)
+        if invalid:
+            st.warning(f"发现 {invalid} 条历史时长异常，未计入图表和合计。下方明细保留原始值，请核对后再修正。")
+        df["valid_hours"] = df["duration"].map(duration_hours)
         df["date"] = pd.to_datetime(df["date"], errors="coerce")
         first = chosen.replace(day=1)
         last = (first + timedelta(days=32)).replace(day=1) - timedelta(days=1)
-        series = df.groupby("date")["duration"].sum().reindex(pd.date_range(first, last), fill_value=0)
+        series = df.groupby("date")["valid_hours"].sum().reindex(pd.date_range(first, last), fill_value=0)
         chart = series.rename_axis("日期").reset_index(name="小时")
         figure = px.area(chart, x="日期", y="小时", color_discrete_sequence=["#728D75"])
         figure.update_layout(height=260, margin=dict(l=10, r=10, t=15, b=10), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(figure, width="stretch", config={"displayModeBar": False})
-        st.metric("该月专注时长", f"{df['duration'].sum():.2f} h")
-        for label, amount in df.groupby("period")["duration"].sum().items(): st.caption(f"{label} · {amount:.1f} 小时")
+        st.metric("该月专注时长", f"{df['valid_hours'].sum():.2f} h")
+        for label, amount in df.groupby("period")["valid_hours"].sum().items(): st.caption(f"{label} · {amount:.1f} 小时")
         columns = [c for c in ["date", "task_type", "period", "duration", "details", "mood"] if c in df]
         st.dataframe(df[columns].sort_values("date", ascending=False), hide_index=True, width="stretch")
     else: empty("这个月还没有完成的专注记录。")

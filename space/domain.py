@@ -1,6 +1,7 @@
 """Pure date, validation and export logic; no UI or network dependencies."""
 from datetime import date, datetime, time, timedelta, timezone
 from html import escape
+import math
 
 TZ = timezone(timedelta(hours=8))
 PERIODS = ["上午", "下午", "晚上", "深夜"]
@@ -31,6 +32,19 @@ def safe_html(value):
     return escape(str(value or ""), quote=True)
 
 
+def valid_duration(value):
+    try:
+        hours = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return math.isfinite(hours) and hours >= 0
+
+
+def duration_hours(value):
+    """Exclude invalid legacy values without rewriting the original record."""
+    return float(value) if valid_duration(value) else 0.0
+
+
 def safe_google_link(value):
     from urllib.parse import urlparse
     parsed = urlparse(value or "")
@@ -58,9 +72,11 @@ def markdown_report(day, logs, routines, inspirations):
     today_logs = [row for row in logs if row["date"] == day]
     text = [f"# 科研日报 | {day}", "", "## 习惯打卡"]
     text.extend(f"- {'✅' if routine.get(key) else '⬜'} {label}" for key, label in HABITS.items())
-    total = sum(float(row.get("duration") or 0) for row in today_logs)
+    total = sum(duration_hours(row.get("duration")) for row in today_logs)
     text += ["", f"## 专注记录 · {total:.2f} 小时"]
-    text.extend(f"- **{row.get('task_type', '')}** · {row.get('period', '')} · {float(row.get('duration') or 0):.2f}h\n  {row.get('details') or '未填写备注'} {row.get('mood') or ''}" for row in today_logs)
+    for row in today_logs:
+        hours = f"{duration_hours(row.get('duration')):.2f}h" if valid_duration(row.get('duration')) else "时长异常，未计入统计"
+        text.append(f"- **{row.get('task_type', '')}** · {row.get('period', '')} · {hours}\n  {row.get('details') or '未填写备注'} {row.get('mood') or ''}")
     if not today_logs:
         text.append("- 今天还没有完成的专注记录。")
     text += ["", "## 灵感捕捉"]

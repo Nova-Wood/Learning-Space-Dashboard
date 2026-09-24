@@ -1,10 +1,20 @@
 import unittest
 from datetime import date, datetime
 from space.domain import (TZ, month_bounds, event_span, overlapping_events, markdown_report,
-                          required_text, safe_html, safe_google_link)
+                          required_text, safe_html, safe_google_link, duration_hours, valid_duration)
 
 
 class DomainTests(unittest.TestCase):
+    def test_invalid_legacy_durations_are_excluded_and_flagged(self):
+        for value in [-7.98, float('nan'), float('inf'), None, 'bad']:
+            self.assertFalse(valid_duration(value))
+            self.assertEqual(duration_hours(value), 0)
+        logs = [{'date':'2026-04-03','duration':-7.98}, {'date':'2026-04-03','duration':1.5}]
+        report = markdown_report('2026-04-03', logs, [], [])
+        self.assertIn('1.50 小时', report)
+        self.assertIn('时长异常，未计入统计', report)
+        self.assertEqual(logs[0]['duration'], -7.98)
+
     def test_month_bounds_keep_year_and_rollover(self):
         self.assertEqual(month_bounds(date(2026, 12, 15)), ('2026-12-01', '2027-01-01'))
         self.assertEqual(month_bounds(date(2024, 2, 29)), ('2024-02-01', '2024-03-01'))
