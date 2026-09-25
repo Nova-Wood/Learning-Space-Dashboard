@@ -6,9 +6,10 @@ import time
 import streamlit as st
 from supabase import create_client
 from space.calendar_client import CalendarClient, CalendarError
-from space.domain import HABITS, now
+from space.domain import now
 from space.repository import Repository, StorageError
 from space.theme import apply_theme
+from space.sidebar import render_sidebar
 from space import views
 
 st.set_page_config(page_title="Learning Space · 科研日常", page_icon="🌿", layout="wide")
@@ -93,26 +94,7 @@ def main():
         # Another device may have finished the last locally started session.
         st.session_state.pop("focus_request", None)
     today = now().date()
-    with st.sidebar:
-        st.markdown('<div class="brand">RESEARCH & EVERYDAY</div><div class="brand-name">Learning Space<span style="color:#7C9974">.</span></div>'
-                    '<div class="subtle">专注 · 积累 · 慢慢生长</div>', unsafe_allow_html=True)
-        st.divider()
-        page = st.radio("工作台导航", ["今日概览", "任务与日程", "阅读与灵感", "记录与统计", "设置"], label_visibility="collapsed")
-        st.divider()
-        st.markdown("**照顾好自己**")
-        st.caption(f"{today:%m 月 %d 日} · 今日习惯")
-        rows = repo.rows("daily_routines", [("eq", "date", str(today))])
-        current = rows[0] if rows else {}
-        with st.form(f"habits_{today}"):
-            habits = {key: st.checkbox(label, value=bool(current.get(key)), key=f"{today}_{key}") for key, label in HABITS.items()}
-            if st.form_submit_button("保存今日习惯", width="stretch"):
-                repo.save_habits(str(today), habits)
-                views.notice("今日习惯已保存。")
-        st.caption("北京时间 · UTC+8")
-        if st.button("刷新工作台", width="stretch"): st.rerun()
-        if not DEMO and st.button("退出空间", width="stretch"):
-            st.session_state.clear()
-            st.rerun()
+    page = render_sidebar(repo, calendar, today, demo=DEMO)
     st.caption(config.get("system_name") or "Learning Space")
     message = st.empty()
     if st.session_state.get("notice"):
