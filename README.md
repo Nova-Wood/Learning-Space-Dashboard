@@ -1,122 +1,96 @@
-# 🎓 Novawood's Learning Space | 硕博科研全平台工作流
+# Learning Space · 个人科研工作台
 
-![Python](https://img.shields.io/badge/Python-3.12-blue) ![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B) ![Supabase](https://img.shields.io/badge/Supabase-Database-3ECF8E)
+一个安静的个人科研空间：专注计时、任务四象限、阅读笔记、习惯记录、灵感收集，以及 Google 日历日程安排。奶油白与森林绿界面，适配桌面和手机。
 
-告别碎片化的纸质手账与笨重的效率软件。这是一个基于 Python + Streamlit + Supabase 打造的**全平台、云同步、高定制度**的科研日常管理看板。(灵感来自小红书@yuyu）
+## 功能
 
-它不仅是一个打卡器，更是一个融合了「时间追踪 + 艾森豪矩阵 + 知识沉淀 (Obsidian联动)」的专属科研操作系统。
-<img width="1912" height="960" alt="2593453bd87c28323ef14d141237102" src="https://github.com/user-attachments/assets/386f14a1-2874-4733-b51c-79bf8fed73e0" />
+- 数据库事务打卡：并发保护、重试幂等、北京时间跨午夜拆分。
+- 按真实年月统计，分页读取，不会在 1,000 条后静默截断。
+- 阅读笔记独立保存；已完成任务、已读文献可查看、恢复。
+- 灵感历史分页展示；Markdown 日报生成后可反复下载到 Obsidian。
+- Google 日历：查看全天/重复日程，从任务创建日程，时间冲突提示，重试避免重复创建。
+- 标题、格言可修改；登录有效期 12 小时，可主动退出。
 
----
+这是**单人使用的私有工作台**，不是多租户应用。持有访问密码的人可以操作整个空间及所连接日历。会话内的登录退避不能替代网关限流；多人使用应接入身份认证、user_id 和逐用户 RLS。
 
-## ✨ 核心亮点 (Core Features)
+## 技术与目录
 
-* **☁️ 跨设备状态漫游**：基于 Supabase 云端数据库，彻底打破设备壁垒。在实验室电脑点击“签到”，回宿舍路上用手机浏览器直接“签退”，数据无缝实时同步。
-* **🔒 私密空间守护**：内置 `Session State` 密码拦截门。无论部署在何处，没有你的专属密码，闲人绝对无法窥探或篡改你的科研数据与私密吐槽。
-* **🎯 四象限任务池 (Eisenhower Matrix)**：支持为待办事项设定 DDL（截止日期）与优先级。系统自动计算倒计时，逾期自动标红警告，专治 DDL 拖延症。
-* **💡 灵感碎片收集箱**：瀑布流卡片设计，随时捕捉“Eureka Moment（顿悟时刻）”。科研 Idea、写作思路、代码解法分类存储。
-* **📚 文献阅读管理**：专属的论文精读跟踪库，支持记录阶段性笔记，一键标记“已读完”。
-* **📊 自动化数据洞察**：根据打卡记录，自动生成每日专注时长柱状图与精力分布饼图。
-* **🔗 完美接入 Obsidian**：一键生成标准 Markdown 格式的「今日科研日报」，直接拖入 Obsidian 构建你的第二大脑知识图谱。
+Python 3.11+ / Streamlit / Supabase PostgreSQL / Pandas / Plotly / Google Calendar REST API。
 
----
-
-## 🚀 极速云端部署指南 (无需懂代码)
-
-想要拥有一个属于你自己的专属链接？只需简单三步，5 分钟即可免费上线！
-
-### Step 1: 建立 Supabase 云端大脑
-
-1. 注册/登录 [Supabase](https://supabase.com/)，新建一个 Project。
-2. 进入项目左侧导航栏的 **SQL Editor**，新建 Query，复制并运行以下 SQL 脚本以初始化数据库：
-
-<details>
-<summary>👉 点击展开查看 SQL 初始化脚本</summary>
-
-```sql
-create table study_log (
-  id bigint primary key generated always as identity,
-  date text, period text, start_time text, end_time text, location text, task_type text, duration float, details text, mood text
-);
-
-create table reading_plan (
-  id bigint primary key generated always as identity,
-  create_date text, book_name text, plan_content text, actual_done text, status text
-);
-
-create table tasks (
-  id bigint primary key generated always as identity,
-  task_name text, status text, create_date text, deadline text, priority text
-);
-
-create table system_config (
-  id integer primary key, system_name text, daily_motto text
-);
-
-insert into system_config (id, system_name, daily_motto) values (1, 'Novawood''s Learning Space', '今日目标: 拒绝内耗，按时干饭！');
-
-create table current_status (
-  id integer primary key, is_working boolean, start_time text, location text, task_type text, period text
-);
-
-insert into current_status (id, is_working) values (1, false);
-
-create table inspirations (
-  id bigint primary key generated always as identity,
-  create_time text, content text, category text
-);
+```text
+app.py                      配置、认证、导航与入口
+space/domain.py             日期、校验、导出与日程区间
+space/repository.py         分页查询、数据写入、打卡 RPC
+space/calendar_client.py    Google token 刷新及日历 API
+space/views.py              页面模块
+space/theme.py              视觉样式
+space/demo.py               独立示例预览，不访问真实服务
+supabase/migrations/        完整初始化/升级 SQL
+scripts/                   本地一次性 Google 授权工具
+tests/                     逻辑、界面与 PostgreSQL 集成测试
 ```
 
-</details>
+## 新部署
 
-3. 运行成功后，进入 **Project Settings -> API**，复制你的 `Project URL` 和 `anon public key` 保存备用。
-
-### Step 2: 部署前端网页
-
-1. Fork 本仓库到你的 GitHub 账号下。
-2. 登录 [Streamlit Community Cloud](https://share.streamlit.io/)，点击 **New app**。
-3. 选择你 Fork 的仓库，主文件路径填写 `app.py`。
-4. ⚠️ **最重要的一步**：点击页面底部的 **Advanced settings...**，在 **Secrets** 文本框中按以下格式填入你刚才保存的数据库秘钥：
+1. 在 Supabase SQL Editor 执行 `supabase/migrations/001_reliable_workspace.sql`。
+2. Streamlit Community Cloud 选择仓库、分支和 `app.py`，Python 使用 3.11 或更高版本。
+3. 参考 `.streamlit/secrets.toml.example`，填写 Cloud Secrets：
 
 ```toml
-SUPABASE_URL = "https://你的Project_URL.supabase.co"
-SUPABASE_KEY = "你的那一长串anon_public_key"
+APP_PASSWORD = "自行生成的长且唯一密码"
+SUPABASE_URL = "https://YOUR_PROJECT.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY = "服务端 service_role 密钥"
 ```
 
-5. 点击 **Deploy!** 气球飘落后，你的专属系统即刻上线。
+密钥仅在 Streamlit 服务端使用。**不要使用 anon key 替代服务端密钥，不要把 service_role 密钥放进网页、截图或 Git 仓库。** SQL 已对全部业务表启用 RLS 并撤销匿名/普通认证角色权限，由服务端代理访问。
 
----
+4. 可选：[连接 Google 日历](docs/google-calendar.md)。未配置日历时其余功能可正常使用。
+5. 启动后用密码进入。已取消 `?key=密码` 免密入口。
 
-## 💻 进阶：本地开发与运行指南
+## 旧版升级
 
-如果你希望在本地修改代码、增加新功能，请遵循以下环境隔离规范（避免因 C++ 编译工具缺失导致的本地报错）：
+先阅读 [升级与验收](docs/upgrade.md)。需在维护窗口一起升级 SQL、Secrets 和应用：
 
-1. **推荐环境**：强烈建议使用 **Python 3.11 或 3.12** 稳定版本。
-2. **建立虚拟环境**：
+- 备份数据库，确认 `daily_routines` 每日期最多一条。
+- 配置 `SUPABASE_SERVICE_ROLE_KEY` 和原来的 `APP_PASSWORD`。
+- 执行迁移再部署新版本。保留旧表、旧记录和空间名称。
+- 日期暂保留 text，避免强制转换造成历史数据丢失。新事务记录由数据库生成规范日期。
+- 不自动修正历史跨日日志、删除重复记录或修改真实 Google 日程。
 
-```bash
+## 本地运行
+
+```sh
 python -m venv .venv
-# Windows 激活:
-.venv\Scripts\activate
-# Mac/Linux 激活:
-source .venv/bin/activate
-```
-
-3. **安装依赖包**：
-
-```bash
+# Windows: .venv\Scripts\activate
+# macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-4. **配置本地秘钥**：
-在项目根目录下新建 `.streamlit` 文件夹，在其中创建 `secrets.toml` 文件，并写入与云端相同的 `SUPABASE_URL` 和 `SUPABASE_KEY`。
-*(注意：请确保 `.streamlit` 文件夹已加入 `.gitignore`，切勿将秘钥推送到公开仓库！)*
-
-5. **启动系统**：
-
-```bash
+# 将 .streamlit/secrets.toml.example 复制为 .streamlit/secrets.toml 并填写
 streamlit run app.py
 ```
 
----
-*Powered by Python & Streamlit | 🎓*
+固定已验证的直接依赖版本，传递依赖由 pip 解析。本地密钥和授权输出已被 `.gitignore` 排除。
+
+只看界面、不连接真实数据（PowerShell）：
+
+```powershell
+$env:LEARNING_SPACE_DEMO = "1"
+streamlit run app.py
+```
+
+macOS/Linux 使用 `LEARNING_SPACE_DEMO=1 streamlit run app.py`。演示模式明确标注示例数据，生产环境不要设置此变量。
+
+## 测试
+
+```sh
+pip install -r requirements-dev.txt
+python -m unittest discover -s tests -v
+```
+
+没有 `TEST_DATABASE_URL` 时数据库集成测试跳过，其余测试无线上写入。GitHub Actions 使用独立 PostgreSQL 16，验证事务回滚、并发签退、跨日拆分与匿名访问拒绝。数据库测试仅接受本机/CI 的 `*_test` 数据库，并清空其中的测试业务表，不能指向真实数据库。
+
+## 边界
+
+- 跨设备刷新后读取最新状态，尚未实现实时推送。
+- 日历授权属于部署应用，不会继承聊天应用里的 Google 连接。
+- 按需读取日历，只在用户提交时创建事件；暂不双向同步任务状态、不修改/删除既有事件、不邀请参与者。
+- 日历故障不会阻止专注打卡；授权撤销后可重新运行连接工具。
