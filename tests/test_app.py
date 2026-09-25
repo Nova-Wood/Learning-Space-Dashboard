@@ -81,6 +81,23 @@ class AppTests(unittest.TestCase):
 
 
 class AuthTests(unittest.TestCase):
+    def test_public_privacy_never_loads_private_workspace(self):
+        with patch.dict(os.environ, {'LEARNING_SPACE_DEMO':'0'}), patch('supabase.create_client') as connect:
+            at = AppTest.from_file(APP)
+            at.secrets['APP_PASSWORD'] = 'test-only-password'
+            at.query_params['page'] = 'privacy'
+            at.query_params['key'] = 'must-not-be-used'
+            at.run()
+            self.assertFalse(at.exception)
+            self.assertEqual(at.title[0].value, '隐私与日历权限')
+            self.assertNotIn('auth', at.session_state)
+            self.assertNotIn('key', at.query_params)
+            connect.assert_not_called()
+            button(at, '返回工作台').click().run()
+            self.assertTrue(at.text_input)
+            self.assertNotIn('auth', at.session_state)
+            connect.assert_not_called()
+
     def test_no_secrets_is_friendly(self):
         with patch.dict(os.environ, {'LEARNING_SPACE_DEMO':'0'}):
             at = AppTest.from_file(APP).run()
