@@ -45,6 +45,7 @@ def authenticate(secrets):
             st.session_state["login_failures"] = failures
             st.session_state["retry_after"] = time.time() + min(60, 2 ** min(failures, 6))
             st.error("密码不正确，请重新输入。")
+    st.markdown("[隐私与日历权限](?page=privacy)")
     st.stop()
 
 
@@ -62,6 +63,12 @@ def google_calendar(config):
 
 
 def main():
+    if "key" in st.query_params:
+        del st.query_params["key"]
+    if st.query_params.get("page") == "privacy":
+        from space.privacy import show_privacy
+        show_privacy()
+        return
     if DEMO:
         from space.demo import DemoRepository, DemoCalendar
         repo, calendar = DemoRepository(st.session_state), DemoCalendar(st.session_state)
